@@ -1,9 +1,10 @@
 import '@/global.css';
-import { ClerkProvider } from '@clerk/expo';
+import { ClerkProvider, useAuth } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
 import { useFonts } from "expo-font";
 import { SplashScreen, Stack } from "expo-router";
 import { useEffect } from "react";
+import { PostHogProvider } from 'posthog-react-native';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -13,7 +14,9 @@ if (!publishableKey) {
   throw new Error('Add your Clerk Publishable Key to the .env file');
 }
 
-export default function RootLayout() {
+function RootLayoutContent() {
+  const { isLoaded: authLoaded } = useAuth();
+
   const [fontsLoaded] = useFonts({
     'sans-regular': require('../assets/fonts/PlusJakartaSans-Regular.ttf'),
     'sans-bold': require('../assets/fonts/PlusJakartaSans-Bold.ttf'),
@@ -24,15 +27,27 @@ export default function RootLayout() {
   })
 
   useEffect(() => {
-    if (fontsLoaded) {
+    // Hide splash only when both fonts and auth are loaded
+    if (fontsLoaded && authLoaded) {
       SplashScreen.hideAsync()
     }
-  }, [fontsLoaded])
+  }, [fontsLoaded, authLoaded])
 
+  // Don't render app until both are ready
+  if (!fontsLoaded || !authLoaded) return null;
 
+  return <Stack screenOptions={{ headerShown: false }} />;
+}
+
+export default function RootLayout() {
   return (
-    <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-      <Stack screenOptions={{ headerShown: false }} />;
-    </ClerkProvider>
+    <PostHogProvider
+      apiKey={process.env.EXPO_PUBLIC_POSTHOG_KEY!}
+      options={{ host: process.env.EXPO_PUBLIC_POSTHOG_HOST }}
+    >
+      <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+        <RootLayoutContent />
+      </ClerkProvider>
+    </PostHogProvider>
   );
 }
